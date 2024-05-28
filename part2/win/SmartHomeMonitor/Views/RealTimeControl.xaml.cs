@@ -1,5 +1,10 @@
 ﻿using LiveChartsCore;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Drawing;
 using LiveChartsCore.SkiaSharpView.Extensions;
+using LiveChartsCore.SkiaSharpView.VisualElements;
+using LiveChartsCore.VisualElements;
 using MahApps.Metro.Controls;
 using MQTTnet;
 using MQTTnet.Client;
@@ -49,6 +54,8 @@ namespace SmartHomeMonitoringApp.Views
 
         private async void UserControl_Loaded(object sender, RoutedEventArgs e)
         {
+            
+
             if(Commons.MQTT_CLIENT != null && Commons.MQTT_CLIENT.IsConnected)
             {
                 // 이미 다른 화면에서 MQTT를 연결했다면 ...
@@ -79,6 +86,19 @@ namespace SmartHomeMonitoringApp.Views
             return Task.CompletedTask;
         }
 
+        // 앵귤러차트를 위한 변수, 속성 선언
+        public IEnumerable<ISeries> HumidSeries { get; set; }
+
+        public IEnumerable<VisualElement<SkiaSharpDrawingContext>> VisualElements { get; set; }
+
+        public NeedleVisual Needle { get; set; }
+
+        private static void SetStyle(
+        double sectionsOuter, double sectionsWidth, PieSeries<ObservableValue> series)
+        {
+            series.OuterRadiusOffset = sectionsOuter;
+            series.MaxRadialColumnWidth = sectionsWidth;
+        }
         private void UpdateChart(string payload)
         {
             // 차트에 값 대입해서 차트가 나오도록
@@ -98,8 +118,53 @@ namespace SmartHomeMonitoringApp.Views
                         Series.DataLabelsSize = 50;
                     }
                 ));
-            ChtDinningTemp.Series = tempVal;
+                ChtLivingTemp.Series = ChtDiningTemp.Series = ChtBedTemp.Series = ChtBathTemp.Series = tempVal; // 차트 네개다 같은 값을 할당
+
+                var sectionOuter = 130;
+                var sectionsWidth = 20;
+
+                // 습도차트 값 할당.
+                HumidSeries = GaugeGenerator.BuildAngularGaugeSections(
+                    new GaugeItem(humid,
+                    s => SetStyle(sectionOuter, sectionsWidth, s))
+                    );
+                ChtLivingHumid.Series = ChtDiningHumid.Series = ChtBedHumid.Series = ChtBathHumid.Series = HumidSeries; // 차트랑
+
+                // 습도를 나타낼 앵귤러차트를 초기화
+
+
+                Needle = new NeedleVisual { Value = humid };
+
+                VisualElements = new VisualElement<SkiaSharpDrawingContext>[]
+                {
+                new AngularTicksVisual
+                {
+                    LabelsSize = 16,
+                    LabelsOuterOffset = 15,
+                    OuterOffset = 65,
+                    TicksLength = 15
+                },
+                Needle
+                };
+
+                ChtLivingHumid.VisualElements = ChtDiningHumid.VisualElements = VisualElements;
+                ChtBedHumid.VisualElements = ChtBathHumid.VisualElements = VisualElements;
             });
+        }
+
+        private void BtnWarning_Click(object sender, RoutedEventArgs e)
+        {
+            Commons.MQTT_CLIENT.PublishStringAsync("pknu/rcv/", "{'control':'warning'}");
+        }
+
+        private void BtnNormal_Click(object sender, RoutedEventArgs e)
+        {
+            Commons.MQTT_CLIENT.PublishStringAsync("pknu/rcv/", "{'control':'normal'}");
+        }
+
+        private void BtnOff_Click(object sender, RoutedEventArgs e)
+        {
+            Commons.MQTT_CLIENT.PublishStringAsync("pknu/rcv/", "{'control':'off'}");
         }
     }
 }
